@@ -43,6 +43,7 @@ def combine_cc_statements(directory, start_date=None, end_date=None):
             df["Account"] = "CapitalOne"
         elif filename.startswith("Discover"):
             col_map = {"Trans. Date": "Date", "Description": "Payee"}
+            df["Amount"] = -1 * df["Amount"]
             df.rename(col_map, inplace=True, axis="columns")
             df["Account"] = "Discover Card"
         elif filename.startswith("USAAVisa"):
