@@ -92,6 +92,8 @@ def filter_ynab_data(file, start_date=None, end_date=None, days=90):
     if not end_date:
         end_date = datetime.datetime.now()
 
+    print(f'Filtering YNAB data between {start_date} - {end_date}')
+
     df = pd.read_csv(file)
     df = _filter_by_dates(df, "Date", start_date, end_date)
 
@@ -107,11 +109,10 @@ def filter_ynab_data(file, start_date=None, end_date=None, days=90):
 
     df.drop(columns=["Flag", "Check Number", "Running Balance"], inplace=True)
 
+    print(f'Removing all rows except Checking and HSA accounts from YNAB data.')
+
     mask = ((df["Account"] == "Checking") | (df["Account"] == "HSA"))
     match = df.loc[mask]
-
-    # Drop unwanted Accounts
-    # df.drop(df[(df["Account"] == "Checking") & (df["Account"] == "HSA")].index, inplace=True)
 
     return match
 
