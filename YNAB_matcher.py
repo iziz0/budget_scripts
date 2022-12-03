@@ -106,10 +106,13 @@ def filter_ynab_data(file, start_date=None, end_date=None, days=90):
 
     df.drop(columns=["Flag", "Check Number", "Running Balance"], inplace=True)
 
-    # Drop unwanted Accounts
-    df.drop(df[(df["Account"] == "Checking") & (df["Account"] == "HSA")].index, inplace=True)
+    mask = ((df["Account"] == "Checking") | (df["Account"] == "HSA"))
+    match = df.loc[mask]
 
-    return df
+    # Drop unwanted Accounts
+    # df.drop(df[(df["Account"] == "Checking") & (df["Account"] == "HSA")].index, inplace=True)
+
+    return match
 
 
 def compare_sheets(ynab, stmts, merge_on_column="Amount", days_buffer=3):
@@ -123,7 +126,7 @@ def compare_sheets(ynab, stmts, merge_on_column="Amount", days_buffer=3):
 
     # Create empty dataframes
     all_matched_rows = pd.DataFrame()
-    all_unmatched_rows = pd.DataFrame()
+    unmatched_stmt_rows = pd.DataFrame()
 
     column_list = ["Date", "Account", "Category", "Payee", "Description", "Inflow", "Outflow", "Status", "Amount"]
 
@@ -136,7 +139,7 @@ def compare_sheets(ynab, stmts, merge_on_column="Amount", days_buffer=3):
             ynab_group = ynab_amounts.get_group(stmt_group_name)
         except KeyError as e:
             # If there is not a matching YNAB stmt_group, get() will throw a KeyError exception
-            all_unmatched_rows = pd.concat([all_unmatched_rows, stmt_group])
+            unmatched_stmt_rows = pd.concat([unmatched_stmt_rows, stmt_group])
             continue
         # If there is a match, iterate through the rows in the stmt_group
         # itertuples() allows you to reference the column names. iterrows() only gives the row values.
@@ -162,13 +165,13 @@ def compare_sheets(ynab, stmts, merge_on_column="Amount", days_buffer=3):
                 all_matched_rows = pd.concat([all_matched_rows, merged_rows])
                 matched_ynab_rows = pd.concat([matched_ynab_rows, ynab_match])
             else:
-                all_unmatched_rows = pd.concat([all_unmatched_rows, stmt_df])
+                unmatched_stmt_rows = pd.concat([unmatched_stmt_rows, stmt_df])
     # Get all rows in ynab that never matched any statement row
     unmatched_ynab_rows = pd.concat([ynab, matched_ynab_rows]).drop_duplicates(keep=False)
-    unmatched_ynab_rows["Sheet"] = "YNAB"
-    all_unmatched_rows = pd.concat([all_unmatched_rows, unmatched_ynab_rows])
+    # unmatched_ynab_rows["Sheet"] = "YNAB"
+    # unmatched_stmt_rows = pd.concat([unmatched_stmt_rows, unmatched_ynab_rows])
 
-    return all_matched_rows, all_unmatched_rows
+    return all_matched_rows, unmatched_ynab_rows, unmatched_stmt_rows
 
 
 def _filter_by_dates(df: pd.DataFrame, col_name: str, start_date: datetime.datetime, end_date: datetime.datetime):
@@ -208,30 +211,31 @@ if __name__ == '__main__':
     # ynab_df = ynab_df.drop_duplicates()
     ynab_count = len(ynab_df.index)
     print(f'Total items processed from YNAB: {ynab_count}')
-    matched_df, unmatched_df = compare_sheets(ynab_df, combined_statements_df)
+    matched_df, unmatched_ynab, unmatched_stmts = compare_sheets(ynab_df, combined_statements_df)
     # Remove duplicated rows.
     matched_dupes = matched_df[matched_df.duplicated(keep=False)]
     # matched_df = matched_df.drop_duplicates()
     matched_count = len(matched_df.index)
-    unmatched_count = len(unmatched_df.index)
+    unmatched_count = len(unmatched_stmts.index) + len(unmatched_ynab.index)
     print(f'Total: {matched_count + unmatched_count} (matched: {matched_count}, unmatched: {unmatched_count})')
 
     dupes = pd.concat([ynab_dupes, matched_dupes, cc_dupes])
     print(f'Found {len(dupes.index)} duplicate rows.')
 
-    for df in [matched_df, unmatched_df, combined_statements_df]:
+    for df in [matched_df, unmatched_ynab, unmatched_stmts, combined_statements_df]:
         cols = {col: 0.0 for col in df.columns if ("Inflow" in col or "Outflow" in col)}
         # Set any empty Inflow/Outflow columns to 0, the rest to ""
         df.fillna(cols, inplace=True)
 
     # All values in these columns should be 0.0, because they are the unmatched column in each row.
-    matched_df.drop(columns=["Inflow_YNAB", "Outflow_YNAB", "Inflow_Statement", "Outflow_Statement", "Amount"], inplace=True)
-    unmatched_df.drop(columns=["Amount"], inplace=True)
+    matched_df.drop(columns=["Inflow_YNAB", "Outflow_YNAB", "Inflow_Statement", "Outflow_Statement"], inplace=True)
     # If you wanted to drop all columns that only contain 0, you could use:
     # matched_df = matched_df.loc[:, (matched_df != 0).any(axis=0)]
 
     # Output to CSV, leaving out the index column and substituting '' for any null values
     combined_statements_df.to_csv(f"{output_folder}/Combined_Card_Statements.csv", index=False)
-    unmatched_df.to_csv("unmatched_rows.csv", index=False)
+    ynab_df.to_csv(f'{output_folder}/filtered_ynab_data.csv', index=False)
+    unmatched_stmts.to_csv("unmatched_statement_rows.csv", index=False)
+    unmatched_ynab.to_csv("unmatched_ynab_rows.csv", index=False)
     matched_df.to_csv("matched_rows.csv", index=False)
     dupes.to_csv("duplicate_rows.csv", index=False)
