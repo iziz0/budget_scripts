@@ -3,11 +3,11 @@ import datetime
 
 import pandas as pd
 
-def combine_cc_statements(directory, start_date=None, end_date=None):
+def combine_cc_statements(directory, start_date=None, end_date=None, days=None):
     if not start_date:
-        start_date = datetime.datetime.now() - datetime.timedelta(days=90)
-    if not end_date:
-        end_date = datetime.datetime.now()
+        if days:
+            start_date = datetime.datetime.now() - datetime.timedelta(days=days)
+            end_date = datetime.datetime.now()
 
     combined_sheet = pd.DataFrame(
         {"Date": [], "Account": [], "Category": [], "Description": []})
@@ -66,8 +66,9 @@ def combine_cc_statements(directory, start_date=None, end_date=None):
         # Make sure it isn't empty
         if not df.empty:
             # Filter out unwanted dates to keep the DataFrame as small as possible
-            match = _filter_by_dates(df, "Date", start_date, end_date)
-            combined_sheet = pd.concat([combined_sheet, match])
+            if start_date and end_date:
+                match = _filter_by_dates(df, "Date", start_date, end_date)
+                combined_sheet = pd.concat([combined_sheet, match])
 
 
     # Split the Amount columns into Inflow/Outflow
@@ -78,7 +79,6 @@ def combine_cc_statements(directory, start_date=None, end_date=None):
     combined_sheet["Inflow"] = combined_sheet.Inflow.abs()
     combined_sheet["Outflow"] = combined_sheet.Outflow.abs()
 
-    # Strip out any columns we don't need
     outfile = combined_sheet[["Date", "Account", "Category", "Payee", "Description",
                               "Inflow", "Outflow", "Status", "Amount"]]
 
