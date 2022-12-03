@@ -69,7 +69,8 @@ def combine_cc_statements(directory, start_date=None, end_date=None, days=None):
             if start_date and end_date:
                 match = _filter_by_dates(df, "Date", start_date, end_date)
                 combined_sheet = pd.concat([combined_sheet, match])
-
+            else:
+                combined_sheet = pd.concat([combined_sheet, df])
 
     # Split the Amount columns into Inflow/Outflow
     combined_sheet["Inflow"] = combined_sheet.Amount.where(combined_sheet.Amount > 0)
